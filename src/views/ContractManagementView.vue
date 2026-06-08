@@ -120,13 +120,13 @@ const getStatusClass = (status: string) => {
     <el-card class="search-card">
       <el-form ref="formRef" :model="searchForm" :inline="true">
         <el-form-item label="合同编号">
-          <el-input v-model="searchForm.contractNo" placeholder="请输入合同编号" clearable />
+          <el-input v-model="searchForm.contractNo" placeholder="请输入合同编号" clearable style="width: 180px" />
         </el-form-item>
         <el-form-item label="甲方公司">
-          <el-input v-model="searchForm.company" placeholder="请输入甲方公司" clearable />
+          <el-input v-model="searchForm.company" placeholder="请输入甲方公司" clearable style="width: 180px" />
         </el-form-item>
         <el-form-item label="合同状态">
-          <el-select v-model="searchForm.status" placeholder="请选择合同状态" clearable>
+          <el-select v-model="searchForm.status" placeholder="请选择合同状态" clearable style="width: 180px">
             <el-option
               v-for="opt in statusOptions"
               :key="opt.value"
@@ -136,7 +136,7 @@ const getStatusClass = (status: string) => {
           </el-select>
         </el-form-item>
         <el-form-item label="合同负责人">
-          <el-input v-model="searchForm.manager" placeholder="请输入合同负责人" clearable />
+          <el-input v-model="searchForm.manager" placeholder="请输入合同负责人" clearable style="width: 180px" />
         </el-form-item>
         <el-form-item label="合同签订时间">
           <el-date-picker
