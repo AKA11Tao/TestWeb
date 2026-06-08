@@ -8,7 +8,7 @@ const router = useRouter()
 const route = useRoute()
 
 const menuItems = [
-  { path: '/contract', title: '合同管理', icon: Document },
+  { path: '/contract', title: '合同验收管理', icon: Document },
 ]
 
 const handleMenuSelect = (path: string) => {

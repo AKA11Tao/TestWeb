@@ -11,7 +11,7 @@ const router = createRouter({
       path: '/contract',
       name: 'contract',
       component: () => import('../views/ContractManagementView.vue'),
-      meta: { title: '合同管理' },
+      meta: { title: '合同验收管理' },
     },
   ],
 })
