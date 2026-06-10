@@ -1,108 +1,195 @@
 <script setup lang="ts">
-import { ref, reactive } from 'vue'
+import { ref, reactive, onMounted } from 'vue'
 import { ElMessage, ElMessageBox } from 'element-plus'
-import type { FormInstance } from 'element-plus'
+import type { FormInstance, FormRules } from 'element-plus'
+import type { Contract, ContractFormData, ContractStatus } from '@/types/contract'
+import { statusOptions } from '@/types/contract'
+import { getContractList, addContract, updateContract, deleteContract } from '@/api/contract'
 
-interface Contract {
-  id: number
-  contractNo: string
-  company: string
-  status: '未验收' | '验收中' | '已验收未回款' | '已验收已回款'
-  manager: string
-  signDate: string
-}
+// ---- 状态 ----
 
-// 筛选表单
+/** 表格数据（原始全量） */
+const tableData = ref<Contract[]>([])
+
+/** 表格加载状态 */
+const tableLoading = ref(false)
+
+// ---- 筛选表单 ----
+
 const formRef = ref<FormInstance>()
 const searchForm = reactive({
   contractNo: '',
   company: '',
-  status: '',
+  status: '' as string,
   manager: '',
   signDate: '',
 })
 
-// 表格数据
-const tableData = ref<Contract[]>([
-  {
-    id: 1,
-    contractNo: 'HT202601001',
-    company: '某某科技有限公司',
-    status: '已验收已回款',
-    manager: '张三',
-    signDate: '2026-01-15',
-  },
-  {
-    id: 2,
-    contractNo: 'HT202602002',
-    company: '北京创新股份有限公司',
-    status: '验收中',
-    manager: '李四',
-    signDate: '2026-02-20',
-  },
-  {
-    id: 3,
-    contractNo: 'HT202603003',
-    company: '上海数据服务有限公司',
-    status: '未验收',
-    manager: '王五',
-    signDate: '2026-03-10',
-  },
-  {
-    id: 4,
-    contractNo: 'HT202604004',
-    company: '广州智能系统有限公司',
-    status: '已验收未回款',
-    manager: '赵六',
-    signDate: '2026-04-05',
-  },
-])
+/** 加载表格数据（带筛选参数） */
+const loadTableData = async () => {
+  tableLoading.value = true
+  try {
+    const params: Record<string, string> = {}
+    if (searchForm.contractNo) params.contractNo = searchForm.contractNo
+    if (searchForm.company) params.company = searchForm.company
+    if (searchForm.status) params.status = searchForm.status
+    if (searchForm.manager) params.manager = searchForm.manager
+    if (searchForm.signDate) params.signDate = searchForm.signDate
 
-// 合同状态选项
-const statusOptions = [
-  { label: '未验收', value: '未验收' },
-  { label: '验收中', value: '验收中' },
-  { label: '已验收未回款', value: '已验收未回款' },
-  { label: '已验收已回款', value: '已验收已回款' },
-]
-
-// 表格排序
-const sortProp = ref<string>('')
-const sortOrder = ref<string>('')
-
-// 搜索
-const handleSearch = () => {
-  ElMessage.info('搜索功能待实现')
+    const res = await getContractList(params)
+    if (res.code === 200) {
+      tableData.value = res.data
+    } else {
+      ElMessage.error(res.message || '查询失败')
+    }
+  } catch {
+    ElMessage.error('查询失败')
+  } finally {
+    tableLoading.value = false
+  }
 }
 
-// 重置
+// ---- 搜索 & 重置 ----
+
+const handleSearch = () => {
+  loadTableData()
+}
+
 const handleReset = () => {
   formRef.value?.resetFields()
+  searchForm.contractNo = ''
+  searchForm.company = ''
+  searchForm.status = ''
+  searchForm.manager = ''
+  searchForm.signDate = ''
+  loadTableData()
 }
 
-// 新增
+// ---- 新增/编辑弹窗 ----
+
+const dialogVisible = ref(false)
+const dialogTitle = ref('新增合同')
+const editingId = ref<number | null>(null)
+const dialogFormRef = ref<FormInstance>()
+const dialogSaving = ref(false)
+
+const dialogForm = reactive({
+  contractNo: '',
+  company: '',
+  status: '' as ContractStatus | '',
+  manager: '',
+  signDate: '',
+})
+
+const formRules: FormRules = {
+  contractNo: [{ required: true, message: '请输入合同编号', trigger: 'blur' }],
+  company: [{ required: true, message: '请输入甲方公司', trigger: 'blur' }],
+  status: [{ required: true, message: '请选择合同状态', trigger: 'change' }],
+  manager: [{ required: true, message: '请输入合同负责人', trigger: 'blur' }],
+  signDate: [{ required: true, message: '请选择合同签订时间', trigger: 'change' }],
+}
+
+const resetDialogForm = () => {
+  dialogForm.contractNo = ''
+  dialogForm.company = ''
+  dialogForm.status = ''
+  dialogForm.manager = ''
+  dialogForm.signDate = ''
+}
+
 const handleAdd = () => {
-  ElMessage.info('新增功能待实现')
+  editingId.value = null
+  dialogTitle.value = '新增合同'
+  resetDialogForm()
+  dialogVisible.value = true
 }
 
-// 编辑
 const handleEdit = (row: Contract) => {
-  ElMessage.info(`编辑：${row.contractNo}`)
+  editingId.value = row.id
+  dialogTitle.value = '编辑合同'
+  dialogForm.contractNo = row.contractNo
+  dialogForm.company = row.company
+  dialogForm.status = row.status
+  dialogForm.manager = row.manager
+  dialogForm.signDate = row.signDate
+  dialogVisible.value = true
 }
 
-// 删除
+const handleSave = async () => {
+  const valid = await dialogFormRef.value?.validate().catch(() => false)
+  if (!valid) return
+
+  dialogSaving.value = true
+  const formData: ContractFormData = {
+    contractNo: dialogForm.contractNo,
+    company: dialogForm.company,
+    status: dialogForm.status as ContractStatus,
+    manager: dialogForm.manager,
+    signDate: dialogForm.signDate,
+  }
+
+  try {
+    if (editingId.value !== null) {
+      const res = await updateContract(editingId.value, formData)
+      if (res.code === 200) {
+        ElMessage.success('编辑成功')
+      } else {
+        ElMessage.error(res.message || '编辑失败')
+        return
+      }
+    } else {
+      const res = await addContract(formData)
+      if (res.code === 200) {
+        ElMessage.success('新增成功')
+      } else {
+        ElMessage.error(res.message || '新增失败')
+        return
+      }
+    }
+
+    dialogVisible.value = false
+    resetDialogForm()
+    await loadTableData()
+  } catch {
+    ElMessage.error(editingId.value !== null ? '编辑失败' : '新增失败')
+  } finally {
+    dialogSaving.value = false
+  }
+}
+
+const handleDialogClose = () => {
+  dialogFormRef.value?.resetFields()
+  resetDialogForm()
+}
+
+// ---- 删除 ----
+
 const handleDelete = (row: Contract) => {
-  ElMessageBox.confirm(`确定要删除合同 "${row.contractNo}" 吗？`, '提示', {
-    confirmButtonText: '确定',
+  ElMessageBox.confirm(`确定要删除合同 "${row.contractNo}" 吗？此操作不可撤销。`, '删除确认', {
+    confirmButtonText: '确定删除',
     cancelButtonText: '取消',
     type: 'warning',
-  }).then(() => {
-    tableData.value = tableData.value.filter((item) => item.id !== row.id)
-    ElMessage.success('删除成功')
   })
+    .then(async () => {
+      try {
+        const res = await deleteContract(row.id)
+        if (res.code === 200) {
+          ElMessage.success('删除成功')
+          await loadTableData()
+        } else {
+          ElMessage.error(res.message || '删除失败')
+        }
+      } catch {
+        ElMessage.error('删除失败')
+      }
+    })
+    .catch(() => {
+      // 用户取消删除，不做操作
+    })
 }
 
-// 状态样式
+// ---- 状态样式（纯 UI，无需接口） ----
+
 const getStatusClass = (status: string) => {
   const statusMap: Record<string, string> = {
     '未验收': 'status-pending',
@@ -112,6 +199,12 @@ const getStatusClass = (status: string) => {
   }
   return statusMap[status] || ''
 }
+
+// ---- 初始化 ----
+
+onMounted(() => {
+  loadTableData()
+})
 </script>
 
 <template>
@@ -162,10 +255,10 @@ const getStatusClass = (status: string) => {
       </div>
       <el-table
         :data="tableData"
+        v-loading="tableLoading"
         border
         stripe
         style="width: 100%"
-        @sort-change="({ prop, order }: { prop?: string; order?: string }) => { sortProp = prop ?? ''; sortOrder = order ?? '' }"
       >
         <el-table-column prop="contractNo" label="合同编号" min-width="120" />
         <el-table-column prop="company" label="甲方公司" min-width="200" />
@@ -177,12 +270,7 @@ const getStatusClass = (status: string) => {
           </template>
         </el-table-column>
         <el-table-column prop="manager" label="合同负责人" min-width="100" />
-        <el-table-column
-          prop="signDate"
-          label="合同签订时间"
-          min-width="140"
-          sortable="custom"
-        />
+        <el-table-column prop="signDate" label="合同签订时间" min-width="140" />
         <el-table-column label="操作" width="180" fixed="right">
           <template #default="{ row }">
             <el-button link type="primary" @click="handleEdit(row)">编辑</el-button>
@@ -191,6 +279,58 @@ const getStatusClass = (status: string) => {
         </el-table-column>
       </el-table>
     </el-card>
+
+    <!-- 新增/编辑弹窗 -->
+    <el-dialog
+      v-model="dialogVisible"
+      :title="dialogTitle"
+      width="500px"
+      :close-on-click-modal="false"
+      @close="handleDialogClose"
+    >
+      <el-form
+        ref="dialogFormRef"
+        :model="dialogForm"
+        :rules="formRules"
+        label-width="120px"
+        label-position="right"
+      >
+        <el-form-item label="合同编号" prop="contractNo">
+          <el-input v-model="dialogForm.contractNo" placeholder="请输入合同编号" />
+        </el-form-item>
+        <el-form-item label="甲方公司" prop="company">
+          <el-input v-model="dialogForm.company" placeholder="请输入甲方公司" />
+        </el-form-item>
+        <el-form-item label="合同状态" prop="status">
+          <el-select v-model="dialogForm.status" placeholder="请选择合同状态" style="width: 100%">
+            <el-option
+              v-for="opt in statusOptions"
+              :key="opt.value"
+              :label="opt.label"
+              :value="opt.value"
+            />
+          </el-select>
+        </el-form-item>
+        <el-form-item label="合同负责人" prop="manager">
+          <el-input v-model="dialogForm.manager" placeholder="请输入合同负责人" />
+        </el-form-item>
+        <el-form-item label="签订时间" prop="signDate">
+          <el-date-picker
+            v-model="dialogForm.signDate"
+            type="date"
+            placeholder="选择日期"
+            value-format="YYYY-MM-DD"
+            style="width: 100%"
+          />
+        </el-form-item>
+      </el-form>
+      <template #footer>
+        <span class="dialog-footer">
+          <el-button @click="dialogVisible = false" :disabled="dialogSaving">取消</el-button>
+          <el-button type="primary" @click="handleSave" :loading="dialogSaving">确认</el-button>
+        </span>
+      </template>
+    </el-dialog>
   </div>
 </template>
 
